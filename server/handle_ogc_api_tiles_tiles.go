@@ -44,7 +44,7 @@ func (req HandleOgcApiTilesTiles) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
     for _, m := range atlas.AllMaps() {
            tilesLink := LinkMap{
-               Href:       buildCapabilitiesURL(r, []string{"maps", m.Name, "{tileMatrix}/{tileRow}/{tileCol}.pbf"}, debugQuery),
+               Href:       buildCapabilitiesURL(r, []string{"maps", m.Name, "{tileMatrix}/{tileCol}/{tileRow}.pbf"}, debugQuery),
                Rel:        "item",
                Type:       "application/vnd.mapbox-vector-tile",
                Title:      "Mapbox vector tiles",
