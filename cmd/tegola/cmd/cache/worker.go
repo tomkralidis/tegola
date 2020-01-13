@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-spatial/geom/slippy"
-	"github.com/go-spatial/tegola"
 	"github.com/go-spatial/tegola/atlas"
 	"github.com/go-spatial/tegola/cache"
 	"github.com/go-spatial/tegola/internal/log"
@@ -27,7 +26,7 @@ func (s seedPurgeWorkerTileError) Error() string {
 	return fmt.Sprintf("error %v tile (%+v): %v", cmd, s.Tile, s.Err)
 }
 
-func seedWorker(tileBuffer *float64, overwrite bool) func(ctx context.Context, mt MapTile) error {
+func seedWorker(overwrite bool) func(ctx context.Context, mt MapTile) error {
 	return func(ctx context.Context, mt MapTile) error {
 		// track how long the tile generation is taking
 		t := time.Now()
@@ -74,13 +73,8 @@ func seedWorker(tileBuffer *float64, overwrite bool) func(ctx context.Context, m
 			}
 		}
 
-		//	set tile buffer if it was configured by the user
-		if tileBuffer != nil {
-			mt.Tile.Buffer = float64(*tileBuffer)
-		}
-
-		//	seed the tile
-		if err = atlas.SeedMapTile(ctx, m, z, x, y); err != nil {
+		// seed the tile
+		if err = atlas.SeedMapTile(ctx, m, mt.Tile); err != nil {
 			if err == context.Canceled {
 				return err
 			}
@@ -117,10 +111,8 @@ func purgeWorker(_ context.Context, mt MapTile) error {
 		}
 	}
 
-	//	purge the tile
-	ttile := tegola.NewTile(mt.Tile.ZXY())
-
-	if err = atlas.PurgeMapTile(m, ttile); err != nil {
+	// purge the tile
+	if err = atlas.PurgeMapTile(m, mt.Tile); err != nil {
 		return seedPurgeWorkerTileError{
 			Purge: true,
 			Tile:  *mt.Tile,

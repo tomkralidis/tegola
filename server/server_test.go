@@ -1,12 +1,16 @@
 package server_test
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/go-spatial/proj"
 
 	"github.com/dimfeld/httptreemux"
 	"github.com/go-spatial/geom"
@@ -20,6 +24,8 @@ const (
 	httpPort       = ":8080"
 	serverVersion  = "0.10.0"
 	serverHostName = "tegola.io"
+	serverCert     = "testcert/cert.pem"
+	serverKey      = "testcert/key.pem"
 )
 
 var (
@@ -64,10 +70,24 @@ var testLayer3 = atlas.Layer{
 
 func newTestMapWithLayers(layers ...atlas.Layer) *atlas.Atlas {
 
-	testMap := atlas.NewWebMercatorMap(testMapName)
+	testMap := atlas.NewMap(testMapName, proj.WebMercator)
 	testMap.Attribution = testMapAttribution
 	testMap.Center = testMapCenter
 	testMap.Layers = append(testMap.Layers, layers...)
+
+	a := &atlas.Atlas{}
+	a.AddMap(testMap)
+
+	return a
+}
+
+func newTestMapWithBounds(minx, miny, maxx, maxy float64) *atlas.Atlas {
+
+	testMap := atlas.NewMap(testMapName, proj.WebMercator)
+	testMap.Attribution = testMapAttribution
+	testMap.Center = testMapCenter
+	testMap.Layers = append(testMap.Layers, testLayer1)
+	testMap.Bounds = &geom.Extent{minx, miny, maxx, maxy}
 
 	a := &atlas.Atlas{}
 	a.AddMap(testMap)
@@ -98,7 +118,7 @@ func init() {
 	server.Version = serverVersion
 	server.HostName = serverHostName
 
-	testMap := atlas.NewWebMercatorMap(testMapName)
+	testMap := atlas.NewMap(testMapName, proj.WebMercator)
 	testMap.Attribution = testMapAttribution
 	testMap.Center = testMapCenter
 	testMap.Layers = append(testMap.Layers,
@@ -147,5 +167,64 @@ func TestURLRoot(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, fn(tc))
+	}
+}
+
+func TestHTTPS(t *testing.T) {
+	server.SSLCert = serverCert
+	server.SSLKey = serverKey
+
+	// start server
+	srv := server.Start(nil, ":8123")
+	time.Sleep(time.Second)
+
+	// set de-secure the tls client
+	hc := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	// don't run other tests on https
+	defer func() {
+		server.SSLCert = ""
+		server.SSLKey = ""
+		srv.Shutdown(context.Background())
+	}()
+
+	type tcase struct {
+		url  string
+		code int
+	}
+
+	fn := func(tc tcase) func(t *testing.T) {
+		return func(t *testing.T) {
+			_, err := hc.Get(tc.url)
+			if err != nil {
+				t.Errorf("unexpected error %v", err)
+				return
+			}
+
+			// TODO(ear7h): there seems to be a race condition on setting the
+			// routes so this is not tested
+			//if res.StatusCode != tc.code {
+			//	t.Errorf("incorrect status code %v, expected %v", res.StatusCode, tc.code)
+			//}
+		}
+	}
+
+	testcases := map[string]tcase{
+		"root": {
+			url:  "https://localhost:8123/",
+			code: http.StatusOK,
+		},
+		"capabilities": {
+			url:  "https://localhost:8123/capabilities",
+			code: http.StatusOK,
+		},
+	}
+
+	for k, v := range testcases {
+		t.Run(k, fn(v))
 	}
 }

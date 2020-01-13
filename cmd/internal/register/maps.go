@@ -5,7 +5,10 @@ import (
 	"html"
 	"strings"
 
+	"github.com/go-spatial/proj"
+
 	"github.com/go-spatial/geom"
+	"github.com/go-spatial/geom/slippy"
 	"github.com/go-spatial/tegola"
 	"github.com/go-spatial/tegola/atlas"
 	"github.com/go-spatial/tegola/config"
@@ -57,10 +60,9 @@ func (e ErrDefaultTagsInvalid) Error() string {
 
 // Maps registers maps with with atlas
 func Maps(a *atlas.Atlas, maps []config.Map, providers map[string]provider.Tiler) error {
-
 	// iterate our maps
 	for _, m := range maps {
-		newMap := atlas.NewWebMercatorMap(string(m.Name))
+		newMap := atlas.NewMap(string(m.Name), proj.WebMercator)
 		newMap.Attribution = html.EscapeString(string(m.Attribution))
 
 		// convert from env package
@@ -70,6 +72,16 @@ func Maps(a *atlas.Atlas, maps []config.Map, providers map[string]provider.Tiler
 		}
 
 		newMap.Center = centerArr
+
+		if m.SRID != nil {
+			newMap.SRID = uint64(*m.SRID)
+			// Ensure that the map's projection is actually supported for tile rendering
+			code := uint(*m.SRID)
+			if _, ok := slippy.SupportedProjections[code]; ok == false {
+				return atlas.ErrUnsupportedTileProjection{Code: code}
+			}
+			newMap.Bounds = slippy.SupportedProjections[code].WGS84Extents
+		}
 
 		if len(m.Bounds) == 4 {
 			newMap.Bounds = geom.NewExtent(
@@ -113,7 +125,7 @@ func Maps(a *atlas.Atlas, maps []config.Map, providers map[string]provider.Tiler
 
 			// confirm our providerLayer name is registered
 			var found bool
-			var layerGeomType tegola.Geometry
+			var layerGeomType geom.Geometry
 			for i := range layerInfos {
 				if layerInfos[i].Name() == providerLayer[1] {
 					found = true
@@ -162,7 +174,7 @@ func Maps(a *atlas.Atlas, maps []config.Map, providers map[string]provider.Tiler
 				DefaultTags:       defaultTags,
 				GeomType:          layerGeomType,
 				DontSimplify:      bool(l.DontSimplify),
-				DontClip:      	   bool(l.DontClip),
+				DontClip:          bool(l.DontClip),
 			})
 		}
 

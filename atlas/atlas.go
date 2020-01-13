@@ -1,17 +1,57 @@
-/*
-Package atlas provides an abstraction for a collection of Maps.
-
-*/
+// Package atlas provides an abstraction for a collection of Maps.
 package atlas
 
 import (
 	"context"
+	"log"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/go-spatial/geom/slippy"
 	"github.com/go-spatial/tegola"
 	"github.com/go-spatial/tegola/cache"
 )
+
+var (
+	simplifyGeometries    bool = true
+	simplificationMaxZoom uint = 10
+)
+
+func init() {
+	// TODO(arolek): the following env variable processing was pulled form the mvt package when
+	// geometry processing was pulled out of the encoding package. This functionality could be
+	// deprecated/removed as it's not well documented and is really a band aid to work around
+	// some simplification issues. These concepts could just as easily live in the config file.
+	options := strings.ToLower(os.Getenv("TEGOLA_OPTIONS"))
+	if strings.Contains(options, "dontsimplifygeo") {
+		simplifyGeometries = false
+		log.Println("simplification is disable")
+	}
+
+	if strings.Contains(options, "simplifymaxzoom=") {
+		idx := strings.Index(options, "simplifymaxzoom=")
+		idx += 16
+
+		eidx := strings.IndexAny(options[idx:], ",.\t \n")
+		if eidx == -1 {
+			eidx = len(options)
+		} else {
+			eidx += idx
+		}
+
+		i, err := strconv.Atoi(options[idx:eidx])
+		if err != nil {
+			log.Printf("invalid value for SimplifyMaxZoom (%v). using default (%v).", options[idx:eidx], simplificationMaxZoom)
+			return
+		}
+
+		simplificationMaxZoom = uint(i + 1)
+
+		log.Printf("SimplifyMaxZoom set to (%v)", simplificationMaxZoom)
+	}
+}
 
 // defaultAtlas is instanitated for convenience
 var defaultAtlas = &Atlas{}
@@ -21,12 +61,10 @@ const (
 	MaxZoom = tegola.MaxZ
 )
 
-/*
-Atlas holds a collection of maps.
-If the pointer to Atlas is nil, it will make use of the default atlas; as the container for maps.
-This is equaivalent to using the functions in the package.
-An Atlas is safe to use concurrently.
-*/
+// Atlas holds a collection of maps.
+// If the pointer to Atlas is nil, it will make use of the default atlas; as the container for maps.
+// This is equaivalent to using the functions in the package.
+// An Atlas is safe to use concurrently.
 type Atlas struct {
 	// for managing current access to the map container
 	sync.RWMutex
@@ -64,20 +102,18 @@ func (a *Atlas) AllMaps() []Map {
 
 // SeedMapTile will generate a tile and persist it to the
 // configured cache backend
-func (a *Atlas) SeedMapTile(ctx context.Context, m Map, z, x, y uint) error {
+func (a *Atlas) SeedMapTile(ctx context.Context, m Map, tile *slippy.Tile) error {
 
 	if a == nil {
 		// Use the default Atlas if a, is nil. This way the empty value is
 		// still useful.
-		return defaultAtlas.SeedMapTile(ctx, m, z, x, y)
+		return defaultAtlas.SeedMapTile(ctx, m, tile)
 	}
 
 	// confirm we have a cache backend
 	if a.cacher == nil {
 		return ErrMissingCache
 	}
-
-	tile := slippy.NewTile(z, x, y, float64(m.TileBuffer), m.SRID)
 
 	// encode the tile
 	b, err := m.Encode(ctx, tile)
@@ -88,16 +124,16 @@ func (a *Atlas) SeedMapTile(ctx context.Context, m Map, z, x, y uint) error {
 	// cache key
 	key := cache.Key{
 		MapName: m.Name,
-		Z:       z,
-		X:       x,
-		Y:       y,
+		Z:       tile.Z,
+		X:       tile.X,
+		Y:       tile.Y,
 	}
 
 	return a.cacher.Set(&key, b)
 }
 
 // PurgeMapTile will purge a map tile from the configured cache backend
-func (a *Atlas) PurgeMapTile(m Map, tile *tegola.Tile) error {
+func (a *Atlas) PurgeMapTile(m Map, tile *slippy.Tile) error {
 	if a == nil {
 		// Use the default Atlas if a, is nil. This way the empty value is
 		// still useful.
@@ -211,12 +247,12 @@ func SetCache(c cache.Interface) {
 
 // SeedMapTile will generate a tile and persist it to the
 // configured cache backend for the defaultAtlas
-func SeedMapTile(ctx context.Context, m Map, z, x, y uint) error {
-	return defaultAtlas.SeedMapTile(ctx, m, z, x, y)
+func SeedMapTile(ctx context.Context, m Map, tile *slippy.Tile) error {
+	return defaultAtlas.SeedMapTile(ctx, m, tile)
 }
 
 // PurgeMapTile will purge a map tile from the configured cache backend
 // for the defaultAtlas
-func PurgeMapTile(m Map, tile *tegola.Tile) error {
+func PurgeMapTile(m Map, tile *slippy.Tile) error {
 	return defaultAtlas.PurgeMapTile(m, tile)
 }

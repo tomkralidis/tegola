@@ -7,16 +7,16 @@ import (
 
 	"github.com/jackc/pgx"
 
-	"github.com/go-spatial/geom/slippy"
-	"github.com/go-spatial/tegola"
+	"github.com/go-spatial/proj"
 	"github.com/go-spatial/tegola/internal/ttools"
+	"github.com/go-spatial/tegola/provider"
 )
 
 func TestReplaceTokens(t *testing.T) {
 	type tcase struct {
 		sql      string
 		srid     uint64
-		tile     *slippy.Tile
+		tile     provider.Tile
 		expected string
 	}
 
@@ -38,33 +38,51 @@ func TestReplaceTokens(t *testing.T) {
 	tests := map[string]tcase{
 		"replace BBOX": {
 			sql:      "SELECT * FROM foo WHERE geom && !BBOX!",
-			srid:     tegola.WebMercator,
-			tile:     slippy.NewTile(2, 1, 1, 64, tegola.WebMercator),
-			expected: "SELECT * FROM foo WHERE geom && ST_MakeEnvelope(-1.017529720390625e+07,-156543.03390625,156543.03390624933,1.017529720390625e+07,3857)",
+			srid:     proj.WebMercator,
+			tile:     provider.NewTile(2, 1, 1, 64, proj.WebMercator),
+			expected: "SELECT * FROM foo WHERE geom && ST_MakeEnvelope(-1.0175297205300871e+07,-156543.03390625,156543.03390625,1.0175297205300868e+07,3857)",
+		},
+		"replace BBOX query 3857 w/ 4326 tile": {
+			sql:      "SELECT * FROM foo WHERE geom && !BBOX!",
+			srid:     3857,
+			tile:     provider.NewTile(2, 1, 1, 64, 4326),
+			expected: "SELECT * FROM foo WHERE geom && ST_MakeEnvelope(-1.5106402774055952e+07,-78273.48162973639,-9.940482654430602e+06,5.7329017585954005e+06,3857)",
+		},
+		"replace BBOX query 4326 w/ 4326 tile": {
+			sql:      "SELECT * FROM foo WHERE geom && !BBOX!",
+			srid:     4326,
+			tile:     provider.NewTile(2, 1, 1, 64, 4326),
+			expected: "SELECT * FROM foo WHERE geom && ST_MakeEnvelope(-135.703125,-0.703125,-89.296875,45.703125,4326)",
+		},
+		"replace BBOX query 4326 w/ 3857 tile": {
+			sql:      "SELECT * FROM foo WHERE geom && !BBOX!",
+			srid:     4326,
+			tile:     provider.NewTile(2, 1, 1, 64, proj.WebMercator),
+			expected: "SELECT * FROM foo WHERE geom && ST_MakeEnvelope(-91.40624999980423,-1.4061088352394662,1.4062499998042484,67.06743335100668,4326)",
 		},
 		"replace BBOX with != in query": {
 			sql:      "SELECT * FROM foo WHERE geom && !BBOX! AND bar != 42",
-			srid:     tegola.WebMercator,
-			tile:     slippy.NewTile(2, 1, 1, 64, tegola.WebMercator),
-			expected: "SELECT * FROM foo WHERE geom && ST_MakeEnvelope(-1.017529720390625e+07,-156543.03390625,156543.03390624933,1.017529720390625e+07,3857) AND bar != 42",
+			srid:     proj.WebMercator,
+			tile:     provider.NewTile(2, 1, 1, 64, proj.WebMercator),
+			expected: "SELECT * FROM foo WHERE geom && ST_MakeEnvelope(-1.0175297205300871e+07,-156543.03390625,156543.03390625,1.0175297205300868e+07,3857) AND bar != 42",
 		},
 		"replace BBOX and ZOOM 1": {
 			sql:      "SELECT id, scalerank=!ZOOM! FROM foo WHERE geom && !BBOX!",
-			srid:     tegola.WebMercator,
-			tile:     slippy.NewTile(2, 1, 1, 64, tegola.WebMercator),
-			expected: "SELECT id, scalerank=2 FROM foo WHERE geom && ST_MakeEnvelope(-1.017529720390625e+07,-156543.03390625,156543.03390624933,1.017529720390625e+07,3857)",
+			srid:     proj.WebMercator,
+			tile:     provider.NewTile(2, 1, 1, 64, proj.WebMercator),
+			expected: "SELECT id, scalerank=2 FROM foo WHERE geom && ST_MakeEnvelope(-1.0175297205300871e+07,-156543.03390625,156543.03390625,1.0175297205300868e+07,3857)",
 		},
 		"replace BBOX and ZOOM 2": {
 			sql:      "SELECT id, scalerank=!ZOOM! FROM foo WHERE geom && !BBOX!",
-			srid:     tegola.WebMercator,
-			tile:     slippy.NewTile(16, 11241, 26168, 64, tegola.WebMercator),
-			expected: "SELECT id, scalerank=16 FROM foo WHERE geom && ST_MakeEnvelope(-1.3163688815956049e+07,4.0352540420407774e+06,-1.3163058210472783e+07,4.035884647524042e+06,3857)",
+			srid:     proj.WebMercator,
+			tile:     provider.NewTile(16, 11241, 26168, 64, proj.WebMercator),
+			expected: "SELECT id, scalerank=16 FROM foo WHERE geom && ST_MakeEnvelope(-1.3163688817788448e+07,4.0352540426024906e+06,-1.3163058212305099e+07,4.035884648085838e+06,3857)",
 		},
 		"replace pixel_width/height and scale_denominator": {
 			sql:      "SELECT id, !pixel_width! as width, !pixel_height! as height, !scale_denominator! as scale_denom FROM foo WHERE geom && !BBOX!",
-			srid:     tegola.WebMercator,
-			tile:     slippy.NewTile(11, 1070, 676, 64, tegola.WebMercator),
-			expected: "SELECT id, 76.43702827453626 as width, 76.43702827453671 as height, 272989.3866947724 as scale_denom FROM foo WHERE geom && ST_MakeEnvelope(899816.6968478388,6.789748347570495e+06,919996.0723123164,6.809927723034973e+06,3857)",
+			srid:     proj.WebMercator,
+			tile:     provider.NewTile(11, 1070, 676, 64, proj.WebMercator),
+			expected: "SELECT id, 76.4370282851769 as width, 76.43702828516689 as height, 272989.38673277467 as scale_denom FROM foo WHERE geom && ST_MakeEnvelope(899816.6969731373,6.78974834851568e+06,919996.0724403388,6.80992772398288e+06,3857)",
 		},
 	}
 

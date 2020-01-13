@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/go-spatial/geom/slippy"
 	"github.com/go-spatial/tegola"
+	"github.com/go-spatial/tegola/atlas"
 	"github.com/go-spatial/tegola/internal/env"
 	"github.com/go-spatial/tegola/internal/log"
 )
@@ -37,6 +39,8 @@ type Webserver struct {
 	Port      env.String `toml:"port"`
 	URIPrefix env.String `toml:"uri_prefix"`
 	Headers   env.Dict   `toml:"headers"`
+	SSLCert env.String `toml:"ssl_cert"`
+	SSLKey env.String `toml:"ssl_key"`
 }
 
 // A Map represents a map in the Tegola Config file.
@@ -47,6 +51,7 @@ type Map struct {
 	Center      [3]env.Float `toml:"center"`
 	Layers      []MapLayer   `toml:"layers"`
 	TileBuffer  *env.Int     `toml:"tile_buffer"`
+	SRID        *env.Uint    `toml:"srid"`
 }
 
 type MapLayer struct {
@@ -88,6 +93,14 @@ func (c *Config) Validate() error {
 	for mapKey, m := range c.Maps {
 		if _, ok := mapLayers[string(m.Name)]; !ok {
 			mapLayers[string(m.Name)] = map[string]MapLayer{}
+		}
+
+		// Ensure that the map's projection is actually supported for tile rendering
+		if m.SRID != nil {
+			code := uint(*m.SRID)
+			if _, ok := slippy.SupportedProjections[code]; !ok {
+				return atlas.ErrUnsupportedTileProjection{Code: code}
+			}
 		}
 
 		for layerKey, l := range m.Layers {

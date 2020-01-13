@@ -8,10 +8,8 @@ import (
 
 	"github.com/go-spatial/cobra"
 	"github.com/go-spatial/geom/slippy"
-	"github.com/go-spatial/tegola"
 	"github.com/go-spatial/tegola/atlas"
 	"github.com/go-spatial/tegola/internal/log"
-	"github.com/go-spatial/tegola/maths"
 	"github.com/go-spatial/tegola/provider"
 
 	gdcmd "github.com/go-spatial/tegola/internal/cmd"
@@ -128,12 +126,7 @@ func seedPurgeCmdValidatePersistent(cmd *cobra.Command, args []string) error {
 	case "purge":
 		seedPurgeWorker = purgeWorker
 	case "seed":
-		var pf64 *float64
-		if Config.TileBuffer != nil {
-			f64 := float64(*Config.TileBuffer)
-			pf64 = &f64
-		}
-		seedPurgeWorker = seedWorker(pf64, cacheOverwrite)
+		seedPurgeWorker = seedWorker(cacheOverwrite)
 	default:
 
 		return fmt.Errorf("expected purge/seed got (%v) for command name", cmdName)
@@ -191,57 +184,74 @@ func seedPurgeCommand(cmd *cobra.Command, args []string) (err error) {
 	}()
 
 	log.Info("zoom list: ", zooms)
-	tilechannel := generateTilesForBounds(ctx, seedPurgeBounds, zooms)
+	tilechannel, err := generateTilesForBounds(ctx, seedPurgeBounds, zooms, seedPurgeMaps)
+	if err != nil {
+		return err
+	}
 
-	return doWork(ctx, tilechannel, seedPurgeMaps, cacheConcurrency, seedPurgeWorker)
+	return doWork(ctx, tilechannel, cacheConcurrency, seedPurgeWorker)
 }
 
-func generateTilesForBounds(ctx context.Context, bounds [4]float64, zooms []uint) *TileChannel {
+func generateTilesForBounds(ctx context.Context, bounds [4]float64, zooms []uint, maps []atlas.Map) (channel *TileChannel, err error) {
+	if len(maps) == 0 {
+		return nil, fmt.Errorf("no maps defined")
+	}
 
 	tce := &TileChannel{
-		channel: make(chan *slippy.Tile),
+		channel: make(chan *MapTile),
 	}
 
 	go func() {
 		defer tce.Close()
-		for _, z := range zooms {
-			// get the tiles at the corners given the bounds and zoom
-			corner1 := slippy.NewTileLatLon(z, bounds[1], bounds[0], 0, tegola.WebMercator)
-			corner2 := slippy.NewTileLatLon(z, bounds[3], bounds[2], 0, tegola.WebMercator)
+		for _, m := range maps {
+			for _, z := range zooms {
+				// get the tiles at the corners given the bounds and zoom
+				srid := uint(m.SRID)
+				grid := slippy.GetGrid(srid)
+				corner1 := slippy.NewTileLatLon(z, bounds[1], bounds[0], srid)
+				corner2 := slippy.NewTileLatLon(z, bounds[3], bounds[2], srid)
 
-			// x,y initials and finals
-			_, xi, yi := corner1.ZXY()
-			_, xf, yf := corner2.ZXY()
+				// x,y initials and finals
+				_, xi, yi := corner1.ZXY()
+				_, xf, yf := corner2.ZXY()
 
-			maxXYatZ := uint(maths.Exp2(uint64(z))) - 1
+				// ensure the initials are smaller than finals
+				// this breaks at the anti meridian: https://github.com/go-spatial/tegola/issues/500
+				if xi > xf {
+					xi, xf = xf, xi
+				}
+				if yi > yf {
+					yi, yf = yf, yi
+				}
 
-			// ensure the initials are smaller than finals
-			// this breaks at the anti meridian: https://github.com/go-spatial/tegola/issues/500
-			if xi > xf {
-				xi, xf = xf, xi
-			}
-			if yi > yf {
-				yi, yf = yf, yi
-			}
+				maxXatZ, maxYatZ := grid.MaxXY(z)
 
-			// prevent seeding out of bounds
-			xf = maths.Min(xf, maxXYatZ)
-			yf = maths.Min(yf, maxXYatZ)
+				// prevent seeding out of bounds
+				xf = min(xf, maxXatZ)
+				yf = min(yf, maxYatZ)
 
-		MainLoop:
-			for x := xi; x <= xf; x++ {
-				// loop columns
-				for y := yi; y <= yf; y++ {
-					select {
-					case tce.channel <- slippy.NewTile(z, x, y, 0, tegola.WebMercator):
-					case <-ctx.Done():
-						// we have been cancelled
-						break MainLoop
+			MainLoop:
+				for x := xi; x <= xf; x++ {
+					// loop columns
+					for y := yi; y <= yf; y++ {
+						select {
+						case tce.channel <- &MapTile{MapName: m.Name, Tile: slippy.NewTile(z, x, y)}:
+						case <-ctx.Done():
+							// we have been cancelled
+							break MainLoop
+						}
 					}
 				}
 			}
 		}
 		tce.Close()
 	}()
-	return tce
+	return tce, nil
+}
+
+func min(x, y uint) uint {
+	if x < y {
+		return x
+	}
+	return y
 }

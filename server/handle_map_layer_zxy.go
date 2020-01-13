@@ -8,13 +8,11 @@ import (
 	"strings"
 
 	"github.com/dimfeld/httptreemux"
-	"github.com/go-spatial/geom"
+	"github.com/go-spatial/geom/encoding/mvt"
 	"github.com/go-spatial/geom/slippy"
 	"github.com/go-spatial/tegola"
 	"github.com/go-spatial/tegola/atlas"
 	"github.com/go-spatial/tegola/internal/log"
-	"github.com/go-spatial/tegola/maths"
-	"github.com/go-spatial/tegola/mvt"
 )
 
 type HandleMapLayerZXY struct {
@@ -57,11 +55,15 @@ func (req *HandleMapLayerZXY) parseURI(r *http.Request) error {
 	}
 	req.z = uint(placeholder)
 
-	maxXYatZ := maths.Exp2(placeholder) - 1
+	mp, _ := req.Atlas.Map(req.mapName)
+	msrid := mp.SRID
+
+	grid := slippy.GetGrid(uint(msrid))
+	maxXatZ, maxYatZ := grid.MaxXY(req.z)
 
 	x := params["x"]
 	placeholder, err = strconv.ParseUint(x, 10, 32)
-	if err != nil || placeholder > maxXYatZ {
+	if err != nil || placeholder > uint64(maxXatZ) {
 		log.Warnf("invalid X value (%v)", x)
 		return fmt.Errorf("invalid X value (%v)", x)
 	}
@@ -71,7 +73,7 @@ func (req *HandleMapLayerZXY) parseURI(r *http.Request) error {
 	y := params["y"]
 	yParts := strings.Split(y, ".")
 	placeholder, err = strconv.ParseUint(yParts[0], 10, 32)
-	if err != nil || placeholder > maxXYatZ {
+	if err != nil || placeholder > uint64(maxYatZ) {
 		log.Warnf("invalid Y value (%v)", yParts[0])
 		return fmt.Errorf("invalid Y value (%v)", yParts[0])
 	}
@@ -137,12 +139,14 @@ func (req HandleMapLayerZXY) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tile := slippy.NewTile(req.z, req.x, req.y, float64(m.TileBuffer), tegola.WebMercator)
+	tile := slippy.NewTile(req.z, req.x, req.y)
 
 	{
 		// Check to see that the zxy is within the bounds of the map.
-		textent := geom.Extent(tile.Bounds())
-		if !m.Bounds.Contains(&textent) {
+		// TODO(@ear7h): use a more efficient version of Intersect that doesn't
+		// make a new extent
+		textent := tile.Extent4326(uint(m.SRID))
+		if _, intersect := m.Bounds.Intersect(textent); !intersect {
 			logAndError(w, http.StatusNotFound, "map (%v -- %v) does not contains tile at %v/%v/%v -- %v", req.mapName, m.Bounds, req.z, req.x, req.y, textent)
 			return
 		}

@@ -4,39 +4,47 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
+
 	"github.com/go-spatial/geom"
+	"github.com/go-spatial/geom/encoding/mvt"
+	"github.com/go-spatial/geom/encoding/wkb"
+	"github.com/go-spatial/geom/encoding/wkt"
+	"github.com/go-spatial/geom/planar"
+	"github.com/go-spatial/geom/planar/simplify"
 	"github.com/go-spatial/geom/slippy"
 	"github.com/go-spatial/tegola"
-	"github.com/go-spatial/tegola/basic"
 	"github.com/go-spatial/tegola/dict"
-	"github.com/go-spatial/tegola/internal/convert"
-	"github.com/go-spatial/tegola/mvt"
+	"github.com/go-spatial/tegola/projection"
 	"github.com/go-spatial/tegola/provider"
 	"github.com/go-spatial/tegola/provider/debug"
-	"github.com/golang/protobuf/proto"
 )
 
 // NewMap creates a new map with the necessary default values
-func NewWebMercatorMap(name string) Map {
+func NewMap(name string, srid uint) Map {
+	bounds := slippy.SupportedProjections[srid].WGS84Extents
+
 	return Map{
 		Name: name,
 		// default bounds
-		Bounds:     tegola.WGS84Bounds,
+		Bounds:     bounds,
 		Layers:     []Layer{},
-		SRID:       tegola.WebMercator,
-		TileExtent: 4096,
+		SRID:       uint64(srid),
+		TileExtent: uint64(mvt.DefaultExtent),
 		TileBuffer: uint64(tegola.DefaultTileBuffer),
 	}
 }
 
 type Map struct {
 	Name string
-	// Contains an attribution to be displayed when the map is shown to a user.
+	// Contains an attribution to be displayed when the map is shown to a user),
 	// 	This string is sanatized so it can't be abused as a vector for XSS or beacon tracking.
 	Attribution string
 	// The maximum extent of available map tiles in WGS:84
@@ -144,36 +152,30 @@ func (m Map) Encode(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
 		// go routine for fetching the layer concurrently
 		go func(i int, l Layer) {
 			mvtLayer := mvt.Layer{
-				Name:         l.MVTName(),
-				DontSimplify: l.DontSimplify,
-				DontClip: l.DontClip,
+				Name: l.MVTName(),
 			}
 
 			// on completion let the wait group know
 			defer wg.Done()
 
+			ptile := provider.NewTile(tile.Z, tile.X, tile.Y,
+				uint(m.TileBuffer), uint(m.SRID))
+
 			// fetch layer from data provider
-			err := l.Provider.TileFeatures(ctx, l.ProviderLayerName, tile, func(f *provider.Feature) error {
+			err := l.Provider.TileFeatures(ctx, l.ProviderLayerName, ptile, func(f *provider.Feature) error {
 				// skip row if geometry collection empty.
 				g, ok := f.Geometry.(geom.Collection)
 				if ok && len(g.Geometries()) == 0 {
 					return nil
 				}
 
-				// TODO: remove this geom conversion step once the mvt package has adopted the new geom package
-				geo, err := convert.ToTegola(f.Geometry)
-				if err != nil {
-					return err
-				}
+				geo := f.Geometry
 
-				// check if the feature SRID and map SRID are different. If they are then reporject
-				if f.SRID != m.SRID {
-					// TODO(arolek): support for additional projections
-					g, err := basic.ToWebMercator(f.SRID, geo)
-					if err != nil {
-						return fmt.Errorf("unable to transform geometry to webmercator from SRID (%v) for feature %v due to error: %v", f.SRID, f.ID, err)
-					}
-					geo = g.Geometry
+				// check if the feature SRID and map SRID are different. If they are then reproject
+				geo, convErr := projection.ConvertGeom(m.SRID, f.SRID, geo)
+
+				if convErr != nil {
+					return fmt.Errorf("unable to transform geometry to %v from SRID (%v) for feature %v due to error: %v", m.SRID, f.SRID, f.ID, convErr)
 				}
 
 				// add default tags, but don't overwrite a tag that already exists
@@ -181,6 +183,63 @@ func (m Map) Encode(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
 					if _, ok := f.Tags[k]; !ok {
 						f.Tags[k] = v
 					}
+				}
+
+				// geo-processing is hard and error prone and
+				// tracking the actual geometries that cause errors is imensely
+				// helpful, especially at this point in the pipeline
+				defer func() {
+					if r := recover(); r != nil {
+						// writePanicGeometry will write a wkb and wkt file a
+						// geometry that causes a panic
+						writePanicGeometry(geo, l.MVTName(), tile)
+					}
+				}()
+
+				// multiple ways to turn off simplification. check the atlas init() function
+				// for how the second two conditions are set
+				if !l.DontSimplify && simplifyGeometries && tile.Z < simplificationMaxZoom {
+					simp := simplify.DouglasPeucker{
+						Tolerance: slippy.PixelsToProjectedUnits(tile.Z, tegola.DefaultEpsilon, uint(m.SRID)),
+					}
+
+					var err error
+					geo, err = planar.Simplify(ctx, simp, geo)
+					if err != nil {
+						return err
+					}
+				}
+
+				//TODO: makevalid issues -- disabled clip and makevalid
+				// check if we need to clip and if we do build the clip region (tile extent)
+				// var clipRegion *geom.Extent
+				// if !l.DontClip {
+				// 	webs := slippy.PixelsToProjectedUnits(tile.Z, uint(m.TileBuffer), uint(m.SRID))
+				// 	clipRegion = tile.NativeExtent(uint(m.SRID)).ExpandBy(webs)
+				// }
+
+				// // create a hitmap for the makevalid function
+				// hm, err := hitmap.New(clipRegion, geo)
+				// if err != nil {
+				// 	return err
+				// }
+
+				// // instantiate a new makevalid struct holding the hitmap
+				// mv := makevalid.Makevalid{
+				// 	Hitmap:  hm,
+				// 	Clipper: clip.Default,
+				// }
+
+				// // apply make valid routine
+				// geo, _, err = mv.Makevalid(ctx, geo, clipRegion)
+				// if err != nil {
+				// 	return err
+				// }
+
+				// translate the geometry to tile coordinates
+				geo = mvt.PrepareGeo(geo, tile.NativeExtent(uint(m.SRID)), float64(m.TileExtent))
+				if geo == nil {
+					return nil
 				}
 
 				mvtLayer.AddFeatures(mvt.Feature{
@@ -222,13 +281,8 @@ func (m Map) Encode(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
 	// add layers to our tile
 	mvtTile.AddLayers(mvtLayers...)
 
-	z, x, y := tile.ZXY()
-
-	// TODO (arolek): change out the tile type for VTile. tegola.Tile will be deprecated
-	tegolaTile := tegola.NewTile(uint(z), uint(x), uint(y))
-
-	// generate our tile
-	vtile, err := mvtTile.VTile(ctx, tegolaTile)
+	// generate the MVT tile
+	vtile, err := mvtTile.VTile(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -256,4 +310,27 @@ func (m Map) Encode(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
 
 	// return encoded, gzipped tile
 	return gzipBuf.Bytes(), nil
+}
+
+func writePanicGeometry(geo geom.Geometry, layerName string, tile *slippy.Tile) {
+
+	fname := fmt.Sprintf("panic_geo_%s_%d_%d_%d", layerName, tile.Z, tile.X, tile.Y)
+
+	file, err := os.OpenFile(fname+".wkt", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err == nil {
+		err = wkt.Encode(file, geo)
+		if err != nil {
+			log.Printf("error writing %v: %v", fname, err)
+		}
+		file.Close()
+	}
+
+	file, err = os.OpenFile(fname+".wkb", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err == nil {
+		err = wkb.Encode(hex.NewEncoder(file), geo)
+		if err != nil {
+			log.Printf("error writing %v: %v", fname, err)
+		}
+		file.Close()
+	}
 }
