@@ -6,7 +6,8 @@ import (
     //"strings"
     "net/url"
     //"github.com/dimfeld/httptreemux"
-    "github.com/go-spatial/tegola/atlas"
+    //"github.com/go-spatial/tegola/atlas"
+    //"fmt"
 )
 
 type TileMatrixSetLinkMap struct {
@@ -16,7 +17,7 @@ type TileMatrixSetLinkMap struct {
 
 type OgcApiTilesTiles struct {
     Title string                                `json:"title"`
-    Description string                                `json:"description"`
+    Description string                          `json:"description"`
     Links []LinkMap                             `json:"links"`
     TileMatrixSetLinks []TileMatrixSetLinkMap   `json:"tileMatrixSetLinks"`
 }
@@ -36,21 +37,24 @@ func (req HandleOgcApiTilesTiles) ServeHTTP(w http.ResponseWriter, r *http.Reque
 
 	debugQuery := url.Values{}
 
-    tmsLink := TileMatrixSetLinkMap{
-        TileMatrixSet:       "WorldMercatorWGS84Quad",
-        TileMatrixSetURI:    "http://schemas.opengis.net/tms/1.0/json/examples/WorldMercatorWGS84Quad.json",
+    wgs84Link := TileMatrixSetLinkMap{
+        TileMatrixSet:       "WorldCRS84Quad",
+        TileMatrixSetURI:    "http://schemas.opengis.net/tms/1.0/json/examples/WorldCRS84Quad.json",
     }
-    mapTiles.TileMatrixSetLinks = append(mapTiles.TileMatrixSetLinks, tmsLink)
+    mercatorLink := TileMatrixSetLinkMap{
+        TileMatrixSet:       "WebMercatorQuad",
+        TileMatrixSetURI:    "http://schemas.opengis.net/tms/1.0/json/examples/WebMercatorQuad.json",
+    }
+    mapTiles.TileMatrixSetLinks = append(mapTiles.TileMatrixSetLinks, wgs84Link)
+    mapTiles.TileMatrixSetLinks = append(mapTiles.TileMatrixSetLinks, mercatorLink)
 
-    for _, m := range atlas.AllMaps() {
-           tilesLink := LinkMap{
-               Href:       buildCapabilitiesURL(r, []string{"maps", m.Name, "{tileMatrix}/{tileCol}/{tileRow}.pbf"}, debugQuery),
-               Rel:        "item",
-               Type:       "application/vnd.mapbox-vector-tile",
-               Title:      "Mapbox vector tiles",
-           }
-           mapTiles.Links = append(mapTiles.Links, tilesLink)
-       }
+    tilesLink := LinkMap{
+        Href:       buildCapabilitiesURL(r, []string{"maps", "{tileMatrixSetId}/{tileMatrix}/{tileCol}/{tileRow}.pbf"}, debugQuery),
+        Rel:        "item",
+        Type:       "application/vnd.mapbox-vector-tile",
+        Title:      "Mapbox vector tiles",
+    }
+    mapTiles.Links = append(mapTiles.Links, tilesLink)
 
     w.Header().Add("Content-Type", "application/json")
 
