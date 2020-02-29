@@ -29,6 +29,7 @@ type Tiler interface {
 
 type LayerInfo interface {
 	Name() string
+    SQL() string
 	GeomType() geom.Geometry
 	SRID() uint64
 }

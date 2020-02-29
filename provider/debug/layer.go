@@ -4,12 +4,17 @@ import "github.com/go-spatial/geom"
 
 type Layer struct {
 	name     string
+    sql string
 	geomType geom.Geometry
 	srid     uint64
 }
 
 func (l Layer) Name() string {
 	return l.name
+}
+
+func (l Layer) SQL() string {
+	return l.sql
 }
 
 func (l Layer) GeomType() geom.Geometry {

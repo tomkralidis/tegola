@@ -16,5 +16,6 @@ type Layer struct {
 }
 
 func (l Layer) Name() string            { return l.name }
+func (l Layer) SQL() string            { return l.name }
 func (l Layer) GeomType() geom.Geometry { return l.geomType }
 func (l Layer) SRID() uint64            { return l.srid }
