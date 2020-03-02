@@ -20,6 +20,8 @@ import (
 type HandleMapLayerZXY struct {
 	// required
 	mapName string
+    // kvp's
+    query map[string] interface {}
 	// optional
 	layerName string
 	// zoom
@@ -40,6 +42,12 @@ type HandleMapLayerZXY struct {
 // parseURI reads the request URI and extracts the various values for the request
 func (req *HandleMapLayerZXY) parseURI(r *http.Request) error {
 	var err error
+
+    req.query = make(map[string] interface {})
+
+	for k, v := range r.URL.Query() {
+		req.query[strings.ToLower(k)] = v
+	}
 
 	params := httptreemux.ContextParams(r.Context())
 
@@ -86,9 +94,9 @@ func (req *HandleMapLayerZXY) parseURI(r *http.Request) error {
 	}
 
 	// check for debug request
-	if r.URL.Query().Get("debug") == "true" {
-		req.debug = true
-	}
+    if r.URL.Query().Get("debug") == "true" {
+        req.debug = true
+    }
 
 	return nil
 }
@@ -99,14 +107,18 @@ func logAndError(w http.ResponseWriter, code int, format string, vals ...interfa
 	http.Error(w, msg, code)
 }
 
-// URI scheme: /maps/:map_name/:layer_name/:z/:x/:y
+// URI scheme: /maps/:map_name/:layer_name/:z/:x/:y[?filter=CQL_TEXT]
 // map_name - map name in the config file
 // layer_name - name of the single map layer to render
 // z, x, y - tile coordinates as described in the Slippy Map Tilenames specification
 // 	z - zoom level
 // 	x - row
 // 	y - column
+// filter - OGC CQL filter syntax
 func (req HandleMapLayerZXY) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+    var layer_filter string
+
 	// parse our URI
 	if err := req.parseURI(r); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -137,6 +149,12 @@ func (req HandleMapLayerZXY) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+
+//    fmt.Printf(m.Layers[0].ProviderLayerName)
+//    var jj, _ = m.Layers[0].Provider.Layers()
+//    fmt.Printf("%#v\n", jj)
+//    fmt.Printf("%#v\n", m.Layers[0].Provider.Layers())
+
 	tile := slippy.NewTile(req.z, req.x, req.y, float64(m.TileBuffer), tegola.WebMercator)
 
 	{
@@ -153,7 +171,11 @@ func (req HandleMapLayerZXY) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		m = m.AddDebugLayers()
 	}
 
-	pbyte, err := m.Encode(r.Context(), tile)
+    if _, ok := req.query["filter"]; ok {
+        layer_filter = fmt.Sprintf("%v", req.query["filter"])
+    }
+
+	pbyte, err := m.Encode(r.Context(), tile, layer_filter)
 	if err != nil {
 		switch err {
 		case context.Canceled:

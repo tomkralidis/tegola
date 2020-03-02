@@ -80,7 +80,7 @@ func (a *Atlas) SeedMapTile(ctx context.Context, m Map, z, x, y uint) error {
 	tile := slippy.NewTile(z, x, y, float64(m.TileBuffer), m.SRID)
 
 	// encode the tile
-	b, err := m.Encode(ctx, tile)
+	b, err := m.Encode(ctx, tile, "")
 	if err != nil {
 		return err
 	}

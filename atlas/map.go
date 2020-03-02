@@ -126,7 +126,7 @@ func (m Map) FilterLayersByName(names ...string) Map {
 }
 
 // TODO (arolek): support for max zoom
-func (m Map) Encode(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
+func (m Map) Encode(ctx context.Context, tile *slippy.Tile, layerFilter string) ([]byte, error) {
 	// tile container
 	var mvtTile mvt.Tile
 	// wait group for concurrent layer fetching
@@ -153,7 +153,7 @@ func (m Map) Encode(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
 			defer wg.Done()
 
 			// fetch layer from data provider
-			err := l.Provider.TileFeatures(ctx, l.ProviderLayerName, tile, func(f *provider.Feature) error {
+			err := l.Provider.TileFeatures(ctx, l.ProviderLayerName, tile, layerFilter, func(f *provider.Feature) error {
 				// skip row if geometry collection empty.
 				g, ok := f.Geometry.(geom.Collection)
 				if ok && len(g.Geometries()) == 0 {

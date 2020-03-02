@@ -509,13 +509,19 @@ func (p Provider) Layers() ([]provider.LayerInfo, error) {
 }
 
 // TileFeatures adheres to the provider.Tiler interface
-func (p Provider) TileFeatures(ctx context.Context, layer string, tile provider.Tile, fn func(f *provider.Feature) error) error {
+func (p Provider) TileFeatures(ctx context.Context, layer string, tile provider.Tile, layer_filter string, fn func(f *provider.Feature) error) error {
 	// fetch the provider layer
+
+    fmt.Println("1")
+    fmt.Println(layer_filter)
+    fmt.Println("2")
 	plyr, ok := p.Layer(layer)
 	if !ok {
 		return ErrLayerNotFound{layer}
 	}
 
+    fmt.Println(plyr.Name())
+    fmt.Println(plyr.SQL())
 	sql, err := replaceTokens(plyr.sql, plyr.srid, tile)
 	if err != nil {
 		return fmt.Errorf("error replacing layer tokens for layer (%v) SQL (%v): %v", layer, sql, err)
