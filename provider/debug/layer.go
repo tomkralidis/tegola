@@ -13,10 +13,6 @@ func (l Layer) Name() string {
 	return l.name
 }
 
-func (l Layer) SQL() string {
-	return l.sql
-}
-
 func (l Layer) GeomType() geom.Geometry {
 	return l.geomType
 }
