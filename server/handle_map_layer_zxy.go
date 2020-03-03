@@ -94,9 +94,9 @@ func (req *HandleMapLayerZXY) parseURI(r *http.Request) error {
 	}
 
 	// check for debug request
-    if r.URL.Query().Get("debug") == "true" {
-        req.debug = true
-    }
+	if r.URL.Query().Get("debug") == "true" {
+		req.debug = true
+	}
 
 	return nil
 }
@@ -148,12 +148,6 @@ func (req HandleMapLayerZXY) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-
-//    fmt.Printf(m.Layers[0].ProviderLayerName)
-//    var jj, _ = m.Layers[0].Provider.Layers()
-//    fmt.Printf("%#v\n", jj)
-//    fmt.Printf("%#v\n", m.Layers[0].Provider.Layers())
 
 	tile := slippy.NewTile(req.z, req.x, req.y, float64(m.TileBuffer), tegola.WebMercator)
 
