@@ -35,6 +35,12 @@ func (c *CQLFilter) ToSQL(sql_statement string) (string, error) {
 	re2 := regexp.MustCompile(`(?i)(POINT\s?\(.*\d\)|LINESTRING\s?\(.*\d\)|POLYGON\s?\(\(.*\d\)\))`)
  	filter_text = re2.ReplaceAllString(filter_text, "'$1'::geometry")
 
+    log.Println("Adjusting temporal predicates")
+    re3 := regexp.MustCompile("(?i)before,ends")
+	filter_text = re3.ReplaceAllString(filter_text, "<")
+    re4 := regexp.MustCompile("(?i)after,begins")
+	filter_text = re4.ReplaceAllString(filter_text, ">")
+
     log.Println("Assembling final SQL statement")
 
     matched, err := regexp.MatchString("(?i) WHERE ", sql_statement)
