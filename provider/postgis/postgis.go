@@ -518,26 +518,19 @@ func (p Provider) TileFeatures(ctx context.Context, layer string, tile provider.
 		return ErrLayerNotFound{layer}
     }
 
-	fmt.Println("1")
-    fmt.Println(layer_filter)
-    fmt.Println("2")
-	matched, err := regexp.MatchString("(?i) WHERE ", plyr.sql)
-
     if layer_filter != "" {
-        cql, err := tegola.NewCQLFilter("sql", plyr.sql)
+        log.Println("updating SQL")
+        cql, err := tegola.NewCQLFilter("CQL_TEXT", layer_filter)
         if err != nil {
-            plyr.sql = cql.FilterText
+            return fmt.Errorf("error parsing filter: (%v)", err)
         }
-
-        if matched {
-            log.Println("appending to where clause")
-            plyr.sql = plyr.sql + " and " + layer_filter
-        } else {
-            log.Println("define where clause")
-            plyr.sql = plyr.sql + " where " + layer_filter
+        sql_, err2 := cql.ToSQL(plyr.sql)
+        if err2 != nil {
+            return fmt.Errorf("error converting filter to SQL: (%v)", err2)
         }
+        plyr.sql = sql_
+        log.Printf("New SQL query: %s", plyr.sql)
     }
-    log.Printf("SQL query: %s", plyr.sql)
 
 	sql, err := replaceTokens(plyr.sql, plyr.srid, tile)
 	if err != nil {

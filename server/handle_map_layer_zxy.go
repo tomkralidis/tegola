@@ -166,7 +166,7 @@ func (req HandleMapLayerZXY) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
     if _, ok := req.query["filter"]; ok {
-        layer_filter = fmt.Sprintf("%v", req.query["filter"])
+        layer_filter = fmt.Sprintf("%+v", req.query["filter"].([]string)[0])
     }
 
 	pbyte, err := m.Encode(r.Context(), tile, layer_filter)
