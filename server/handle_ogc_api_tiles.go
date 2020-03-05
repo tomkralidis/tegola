@@ -59,6 +59,14 @@ func (req HandleOgcApiTiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     }
     tiles.Links = append(tiles.Links, mapsLink)
 
+    stylesLink := LinkMap{
+        Href:       buildCapabilitiesURL(r, []string{"ogc-api-tiles", "styles"}, debugQuery),
+        Rel:        "tiles",
+        Type:       "application/json",
+        Title:      "Styles to render the data",
+    }
+    tiles.Links = append(tiles.Links, stylesLink)
+
     w.Header().Add("Content-Type", "application/json")
 
     // cache control headers (no-cache)

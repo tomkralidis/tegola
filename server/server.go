@@ -71,6 +71,7 @@ func NewRouter(a *atlas.Atlas) *httptreemux.TreeMux {
     group.UsingContext().Handler("GET", "/ogc-api-tiles/collections", HeadersHandler(HandleOgcApiTilesCollections{}))
     group.UsingContext().Handler("GET", "/ogc-api-tiles/collections/:layer_name/tiles", HeadersHandler(HandleOgcApiTilesTiles{}))
     group.UsingContext().Handler("GET", "/ogc-api-tiles/tiles", HeadersHandler(HandleOgcApiTilesTiles{}))
+    group.UsingContext().Handler("GET", "/ogc-api-tiles/styles", HeadersHandler(HandleOgcApiTilesStyles{}))
 
 	// map tiles
 	hMapLayerZXY := HandleMapLayerZXY{Atlas: a}
