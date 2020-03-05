@@ -61,7 +61,7 @@ func (req HandleOgcApiTiles) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
     stylesLink := LinkMap{
         Href:       buildCapabilitiesURL(r, []string{"ogc-api-tiles", "styles"}, debugQuery),
-        Rel:        "tiles",
+        Rel:        "styles",
         Type:       "application/json",
         Title:      "Styles to render the data",
     }
