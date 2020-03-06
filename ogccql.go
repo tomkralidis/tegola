@@ -28,7 +28,7 @@ func (c *CQLFilter) ToSQL(sql_statement string) (string, error) {
     var value string
 
     log.Println("Adjusting spatial predicates")
-    re := regexp.MustCompile("(?i)(beyond|contains|crosses|disjoint|dwithin|equals|intersects|overlaps|touches)")
+    re := regexp.MustCompile("(?i)(beyond|contains|crosses|disjoint|within|equals|intersects|overlaps|touches)")
 	filter_text = re.ReplaceAllString(c.FilterText, "st_$1")
 
     log.Println("Adjusting geometry representation")
