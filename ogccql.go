@@ -28,18 +28,20 @@ func (c *CQLFilter) ToSQL(sql_statement string) (string, error) {
     var value string
 
     log.Println("Adjusting spatial predicates")
-    re := regexp.MustCompile("(?i)(beyond|contains|crosses|disjoint|within|equals|intersects|overlaps|touches)")
-	filter_text = re.ReplaceAllString(c.FilterText, "st_$1")
+    re := regexp.MustCompile("(?i)(BEYOND|CONTAINS|CROSSES|DISJOINT|WITHIN|EQUALS|INTERSECTS|OVERLAPS|TOUCHES)")
+	filter_text = re.ReplaceAllString(c.FilterText, "ST_$1")
 
     log.Println("Adjusting geometry representation")
 	re2 := regexp.MustCompile(`(?i)(POINT\s?\(.*\d\)|LINESTRING\s?\(.*\d\)|POLYGON\s?\(\(.*\d\)\))`)
  	filter_text = re2.ReplaceAllString(filter_text, "'$1'::geometry")
 
     log.Println("Adjusting temporal predicates")
-    re3 := regexp.MustCompile("(?i)before,ends")
+    re3 := regexp.MustCompile("(?i)BEFORE,ENDS")
 	filter_text = re3.ReplaceAllString(filter_text, "<")
-    re4 := regexp.MustCompile("(?i)after,begins")
+    re4 := regexp.MustCompile("(?i)AFTER,BEGINS")
 	filter_text = re4.ReplaceAllString(filter_text, ">")
+    re5 := regexp.MustCompile("(?i)TEQUALS")
+	filter_text = re5.ReplaceAllString(filter_text, "=")
 
     log.Println("Assembling final SQL statement")
 
@@ -51,10 +53,10 @@ func (c *CQLFilter) ToSQL(sql_statement string) (string, error) {
 
     if matched {
         log.Println("appending to existing where clause")
-        value = sql_statement + " and " + filter_text
+        value = sql_statement + " AND " + filter_text
     } else {
         log.Println("defining where clause")
-        value = sql_statement + " where " + filter_text
+        value = sql_statement + " WHERE " + filter_text
     }
     return value, nil
 }
