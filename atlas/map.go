@@ -136,7 +136,7 @@ func (m Map) FilterLayersByName(names ...string) Map {
 
 // EncodeTile will return the map as an encode mvt tile
 // TODO (arolek): support for max zoom
-func (m Map) EncodeMVTTile(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
+func (m Map) EncodeMVTTile(ctx context.Context, tile *slippy.Tile, layer_filter string) ([]byte, error) {
 	// tile container
 	var mvtTile mvt.Tile
 	// wait group for concurrent layer fetching
@@ -164,7 +164,7 @@ func (m Map) EncodeMVTTile(ctx context.Context, tile *slippy.Tile) ([]byte, erro
 				uint(m.TileBuffer), uint(m.SRID))
 
 			// fetch layer from data provider
-			err := l.Provider.TileFeatures(ctx, l.ProviderLayerName, ptile, func(f *provider.Feature) error {
+			err := l.Provider.TileFeatures(ctx, l.ProviderLayerName, ptile, layer_filter, func(f *provider.Feature) error {
 				// skip row if geometry collection empty.
 				g, ok := f.Geometry.(geom.Collection)
 				if ok && len(g.Geometries()) == 0 {
@@ -298,9 +298,9 @@ func (m Map) EncodeMVTTile(ctx context.Context, tile *slippy.Tile) ([]byte, erro
 }
 
 // Encode will call EncodeTile to encode the tile and then gzip the contents
-func (m Map) Encode(ctx context.Context, tile *slippy.Tile) ([]byte, error) {
+func (m Map) Encode(ctx context.Context, tile *slippy.Tile, layer_filter string) ([]byte, error) {
 
-	tileBytes, err := m.EncodeMVTTile(ctx, tile)
+	tileBytes, err := m.EncodeMVTTile(ctx, tile, layer_filter)
 	if err != nil {
 		return nil, err
 	}

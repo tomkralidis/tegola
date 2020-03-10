@@ -60,7 +60,8 @@ type Tiler interface {
 
 	// TileFeature will stream decoded features to the callback function fn
 	// if fn returns ErrCanceled, the TileFeatures method should stop processing
-	TileFeatures(ctx context.Context, layer string, t Tile, fn func(f *Feature) error) error
+	TileFeatures(ctx context.Context, layer string, t Tile, layer_filter string, fn func(f *Feature) error) error
+ 	LayerSchema(layer string, t Tile) (map[string]string, error)
 }
 
 type LayerInfo interface {
