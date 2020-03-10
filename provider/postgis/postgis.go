@@ -16,6 +16,7 @@ import (
 	"github.com/go-spatial/geom"
 	"github.com/go-spatial/geom/encoding/wkb"
 	"github.com/go-spatial/proj"
+	"github.com/go-spatial/tegola"
 	"github.com/go-spatial/tegola/dict"
 	"github.com/go-spatial/tegola/provider"
 )
@@ -506,13 +507,68 @@ func (p Provider) Layers() ([]provider.LayerInfo, error) {
 	return ls, nil
 }
 
+func (p Provider) LayerSchema(layer string, tile provider.Tile) (map[string]string, error) {
+
+    var sql string
+
+	schema_map := make(map[string]string)
+
+	plyr, ok := p.Layer(layer)
+
+    if !ok {
+		return schema_map, ErrLayerNotFound{layer}
+    }
+    sql = fmt.Sprintf("%s limit 0", plyr.sql)
+
+	sql, err := replaceTokens(sql, plyr.srid, tile)
+	if err != nil {
+		return schema_map, fmt.Errorf("error replacing layer tokens for layer (%v) SQL (%v): %v", layer, sql, err)
+	}
+
+	if strings.Contains(os.Getenv("TEGOLA_SQL_DEBUG"), "EXECUTE_SQL") {
+		log.Printf("TEGOLA_SQL_DEBUG:EXECUTE_SQL for layer (%v): %v", layer, sql)
+	}
+
+	rows, err := p.pool.Query(sql)
+
+	if err != nil {
+		return schema_map, fmt.Errorf("error running layer (%v) SQL (%v): %v", layer, sql, err)
+	}
+	defer rows.Close()
+
+	// fetch rows FieldDescriptions. this gives us the OID for the data types returned to aid in decoding
+	fdescs := rows.FieldDescriptions()
+
+	// loop our field descriptions looking for the geometry field
+	for i := range fdescs {
+        schema_map[fdescs[i].Name] = fdescs[i].DataTypeName
+	}
+    log.Printf("layer schema: %+v\n", schema_map)
+
+    return schema_map, nil
+}
+
 // TileFeatures adheres to the provider.Tiler interface
-func (p Provider) TileFeatures(ctx context.Context, layer string, tile provider.Tile, fn func(f *provider.Feature) error) error {
+func (p Provider) TileFeatures(ctx context.Context, layer string, tile provider.Tile, layer_filter string, fn func(f *provider.Feature) error) error {
 	// fetch the provider layer
 	plyr, ok := p.Layer(layer)
 	if !ok {
 		return ErrLayerNotFound{layer}
 	}
+
+    if layer_filter != "" {
+        log.Println("updating SQL")
+        cql, err := tegola.NewCQLFilter("CQL_TEXT", layer_filter)
+        if err != nil {
+            return fmt.Errorf("error parsing filter: (%v)", err)
+        }
+        sql_, err2 := cql.ToSQL(plyr.sql)
+        if err2 != nil {
+            return fmt.Errorf("error converting filter to SQL: (%v)", err2)
+        }
+        plyr.sql = sql_
+        log.Printf("New SQL query: %s", plyr.sql)
+    }
 
 	sql, err := replaceTokens(plyr.sql, plyr.srid, tile)
 	if err != nil {

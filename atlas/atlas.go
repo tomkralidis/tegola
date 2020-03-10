@@ -116,7 +116,7 @@ func (a *Atlas) SeedMapTile(ctx context.Context, m Map, tile *slippy.Tile) error
 	}
 
 	// encode the tile
-	b, err := m.Encode(ctx, tile)
+	b, err := m.Encode(ctx, tile, "")
 	if err != nil {
 		return err
 	}

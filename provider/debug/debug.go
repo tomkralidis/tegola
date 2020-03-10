@@ -33,7 +33,13 @@ func NewTileProvider(config dict.Dicter) (provider.Tiler, error) {
 // Provider provides the debug provider
 type Provider struct{}
 
-func (p *Provider) TileFeatures(ctx context.Context, layer string, tile provider.Tile, fn func(f *provider.Feature) error) error {
+func (p Provider) LayerSchema(layer string, tile provider.Tile) (map[string]string, error) {
+
+	schema_map := make(map[string]string)
+    return schema_map, fmt.Errorf("Not implemented")
+}
+
+func (p *Provider) TileFeatures(ctx context.Context, layer string, tile provider.Tile, layer_filter string, fn func(f *provider.Feature) error) error {
 
 	// get tile bounding box
 	ext, srid := tile.Extent()
