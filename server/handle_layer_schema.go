@@ -44,7 +44,6 @@ func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
     if req.layerName != "" {
        m = m.FilterLayersByName(req.layerName)
        if len(m.Layers) == 0 {
@@ -53,12 +52,7 @@ func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    for _, l := range m.Layers {
-        fmt.Printf("LLL: %s -- %s\n", l.Name, l.ProviderLayerName)
-        if l.Name == req.layerName {
-            players, _ := l.Provider.LayerSchema(req.layerName, {})
-        }
-    }
+    queryables, _ := m.Layers[0].Provider.LayerSchema(req.layerName)
 
 	// if we have a debug param add it to our URLs
 	debugQuery := url.Values{}
@@ -77,7 +71,7 @@ func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Pragma", "no-cache")
 	w.Header().Add("Expires", "0")
 
-	if err = json.NewEncoder(w).Encode(req); err != nil {
-		log.Errorf("error encoding tileJSON for map (%v)", req.mapName)
+	if err = json.NewEncoder(w).Encode(queryables); err != nil {
+		log.Errorf("error encoding JSON for queryables on map/layer (%v/%v)", req.mapName, req.layerName)
 	}
 }

@@ -507,7 +507,7 @@ func (p Provider) Layers() ([]provider.LayerInfo, error) {
 	return ls, nil
 }
 
-func (p Provider) LayerSchema(layer string, tile provider.Tile) (map[string]string, error) {
+func (p Provider) LayerSchema(layer string) (map[string]string, error) {
 
     var sql string
 
@@ -520,7 +520,9 @@ func (p Provider) LayerSchema(layer string, tile provider.Tile) (map[string]stri
     }
     sql = fmt.Sprintf("%s limit 0", plyr.sql)
 
-	sql, err := replaceTokens(sql, plyr.srid, tile)
+	sql, err := replaceTokens(sql, plyr.srid, provider.NewTile(0,0,0,64,4326))
+
+
 	if err != nil {
 		return schema_map, fmt.Errorf("error replacing layer tokens for layer (%v) SQL (%v): %v", layer, sql, err)
 	}

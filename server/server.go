@@ -77,6 +77,7 @@ func NewRouter(a *atlas.Atlas) *httptreemux.TreeMux {
 	hMapLayerZXY := HandleMapLayerZXY{Atlas: a}
 	group.UsingContext().Handler("GET", "/maps/:map_name/:z/:x/:y", HeadersHandler(GZipHandler(TileCacheHandler(a, hMapLayerZXY))))
 	group.UsingContext().Handler("GET", "/maps/:map_name/:layer_name/:z/:x/:y", HeadersHandler(GZipHandler(TileCacheHandler(a, hMapLayerZXY))))
+	group.UsingContext().Handler("GET", "/maps/:map_name/:layer_name/queryables", HeadersHandler(HandleLayerSchema{}))
 
 	// map style
 	group.UsingContext().Handler("GET", "/maps/:map_name/style.json", HeadersHandler(HandleMapStyle{}))

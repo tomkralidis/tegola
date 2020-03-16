@@ -60,7 +60,7 @@ type Tiler interface {
 	TileFeatures(ctx context.Context, layer string, t Tile, layer_filter string, fn func(f *Feature) error) error
 	// Layers returns information about the various layers the provider supports
 	Layers() ([]LayerInfo, error)
- 	LayerSchema(layer string, t Tile) (map[string]string, error)
+ 	LayerSchema(layer string) (map[string]string, error)
 }
 
 type LayerInfo interface {

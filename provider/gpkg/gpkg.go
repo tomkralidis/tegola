@@ -119,7 +119,7 @@ func clampTileBBToNativeExtent(tileSRID uint64, layerSRID uint64, tileExtent *ge
 	return ret, nil
 }
 
-func (p Provider) LayerSchema(layer string, tile provider.Tile) (map[string]string, error) {
+func (p Provider) LayerSchema(layer string) (map[string]string, error) {
 
 	schema_map := make(map[string]string)
     return schema_map, fmt.Errorf("Not implemented")
