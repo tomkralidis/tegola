@@ -38,6 +38,13 @@ type Queryables struct {
 func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 
+    qtypes := map[string]string{
+        "int8": "integer",
+        "float4": "number",
+        "varchar": "string",
+        "bytea": "geometry",
+    }
+
 	params := httptreemux.ContextParams(r.Context())
 
     fmt.Println(req)
@@ -68,7 +75,7 @@ func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     for k, v := range queryables {
         qq := Queryable{}
         qq.Name = k
-        qq.Type = v
+        qq.Type = qtypes[v]
 
 		queryables2.QueryablesList = append(queryables2.QueryablesList, qq)
     }
