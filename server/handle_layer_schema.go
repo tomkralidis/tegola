@@ -39,15 +39,16 @@ func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 
     qtypes := map[string]string{
+        "int2": "integer",
         "int8": "integer",
         "float4": "number",
+        "numeric": "number",
         "varchar": "string",
         "bytea": "geometry",
     }
 
 	params := httptreemux.ContextParams(r.Context())
 
-    fmt.Println(req)
 	// read the map_name value from the request
 	req.mapName = params["map_name"]
 	req.layerName = params["layer_name"]
@@ -68,7 +69,7 @@ func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    queryables, _ := m.Layers[0].Provider.LayerSchema(req.layerName)
+    queryables, _ := m.Layers[0].Provider.LayerSchema(m.Layers[0].ProviderLayerName)
 
     queryables2 := Queryables{}
 
