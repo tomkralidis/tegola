@@ -44,6 +44,7 @@ func (req HandleLayerSchema) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         "float4": "number",
         "numeric": "number",
         "varchar": "string",
+        "date": "date",
         "bytea": "geometry",
     }
 
