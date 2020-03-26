@@ -40,12 +40,12 @@ func (c *CQLFilter) ToSQL(sql_statement string, srid uint64) (string, error) {
     filter_text = strings.Replace(filter_text, "LAYER_SRID", strconv.FormatUint(srid, 10), 1)
 
     log.Println("Adjusting temporal predicates")
-    re3 := regexp.MustCompile("(?i)BEFORE,ENDS")
-	filter_text = re3.ReplaceAllString(filter_text, "<")
-    re4 := regexp.MustCompile("(?i)AFTER,BEGINS")
-	filter_text = re4.ReplaceAllString(filter_text, ">")
+    re3 := regexp.MustCompile("(?i)BEFORE|ENDS")
+    filter_text = re3.ReplaceAllString(filter_text, "<")
+    re4 := regexp.MustCompile("(?i)AFTER|BEGINS")
+    filter_text = re4.ReplaceAllString(filter_text, ">")
     re5 := regexp.MustCompile("(?i)TEQUALS")
-	filter_text = re5.ReplaceAllString(filter_text, "=")
+    filter_text = re5.ReplaceAllString(filter_text, "=")
 
     log.Println("Assembling final SQL statement")
 
