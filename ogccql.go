@@ -34,18 +34,17 @@ func (c *CQLFilter) ToSQL(sql_statement string, srid uint64) (string, error) {
 	filter_text = re.ReplaceAllString(c.FilterText, "ST_$1")
 
     log.Println("Adjusting geometry representation")
-	re2 := regexp.MustCompile(`(?i)(POINT\s?\(.*\d\)|LINESTRING\s?\(.*\d\)|POLYGON\s?\(\(.*\d\)\))`)
- 	//filter_text = fmt.Sprintf(re2.ReplaceAllString(filter_text, "ST_Transform('SRID=4326;$1'::geometry, %d)"), srid)
+    re2 := regexp.MustCompile(`(?i)(POINT\s?\(.*\d\)|LINESTRING\s?\(.*\d\)|POLYGON\s?\(\(.*\d\)\))`)
     filter_text = re2.ReplaceAllString(filter_text, "ST_Transform('SRID=4326;$1'::geometry, LAYER_SRID)")
     filter_text = strings.Replace(filter_text, "LAYER_SRID", strconv.FormatUint(srid, 10), 1)
 
     log.Println("Adjusting temporal predicates")
-    re3 := regexp.MustCompile("(?i)BEFORE|ENDS")
-    filter_text = re3.ReplaceAllString(filter_text, "<")
-    re4 := regexp.MustCompile("(?i)AFTER|BEGINS")
-    filter_text = re4.ReplaceAllString(filter_text, ">")
-    re5 := regexp.MustCompile("(?i)TEQUALS")
-    filter_text = re5.ReplaceAllString(filter_text, "=")
+    re3 := regexp.MustCompile(`(?i)(BEFORE|ENDS)\s(\S+)`)
+    filter_text = re3.ReplaceAllString(filter_text, "< '$2'")
+    re4 := regexp.MustCompile(`(?i)(AFTER|BEGINS)\s(\S+)`)
+    filter_text = re4.ReplaceAllString(filter_text, "> '$2'")
+    re5 := regexp.MustCompile(`(?i)(TEQUALS)\s(\S+)`)
+    filter_text = re5.ReplaceAllString(filter_text, "= '$2'")
 
     log.Println("Assembling final SQL statement")
 
