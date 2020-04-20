@@ -37,6 +37,7 @@ func (c *CQLFilter) ToSQL(sql_statement string, srid uint64) (string, error) {
     re2 := regexp.MustCompile(`(?i)\(?(POINT\s?\(.*\d\)|LINESTRING\s?\(.*\d\)|POLYGON\s?\(\(.*\d\)\))\)?`)
     filter_text = re2.ReplaceAllString(filter_text, "ST_Transform('SRID=4326;$1'::geometry, LAYER_SRID)")
     filter_text = strings.Replace(filter_text, "LAYER_SRID", strconv.FormatUint(srid, 10), 1)
+    filter_text = strings.Trim(filter_text, "()")
 
     log.Println("Adjusting temporal predicates")
     re3 := regexp.MustCompile(`(?i)\(?(BEFORE|ENDS)\s(\S+)\)?`)
